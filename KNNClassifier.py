@@ -1,4 +1,13 @@
-Make,Volume,Doors,Style
+import pandas as pd
+import numpy as np
+import io
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
+
+# --- STEP 1: CREATE THE DATA INSIDE THE CODE ---
+csv_data = """Make,Volume,Doors,Style
 Toyota,102,4,Sedan
 Kia,121,5,SUV
 Mazda,113,4,Sedan
@@ -158,4 +167,73 @@ Chevrolet Trailblazer,121,4,SUV
 Audi A5,99,4,Sedan
 Land Rover Discovery,170,4,SUV
 Ford Focus SE,95,4,Sedan
-Ford Bronco,136,4,Jeep
+Ford Bronco,136,4,Jeep"""
+
+# Save this data to a real file so you can submit it
+with open("MyCars.csv", "w") as f:
+    f.write(csv_data)
+print("SUCCESS: Generated 'MyCars.csv' from the data provided.")
+
+# --- STEP 2: LOAD AND PROCESS ---
+# Now we read the file we just created
+df = pd.read_csv("MyCars.csv")
+
+# Select features and target
+X = df[['Volume', 'Doors']]
+y = df['Style']
+
+# Normalize (0-1 scale)
+scaler = MinMaxScaler()
+X_normalized = pd.DataFrame(scaler.fit_transform(X), columns=['Volume', 'Doors'])
+
+# Recombine for splitting
+processed_data = X_normalized.copy()
+processed_data['Style'] = y
+
+# --- STEP 3: SPLIT (80/20) ---
+train_df, test_df = train_test_split(processed_data, test_size=0.2, random_state=42)
+
+# Save split files
+train_df.to_csv('Training.csv', index=False)
+test_df.to_csv('Testing.csv', index=False)
+print("SUCCESS: Created 'Training.csv' and 'Testing.csv'")
+
+# --- STEP 4: TRAIN KNN AND FIND BEST K ---
+X_train = train_df[['Volume', 'Doors']]
+y_train = train_df['Style']
+X_test = test_df[['Volume', 'Doors']]
+y_test = test_df['Style']
+
+accuracies = []
+best_k = 1
+best_accuracy = 0
+best_model = None
+
+for k in range(1, len(X_train) + 1):
+    knn = KNeighborsClassifier(n_neighbors=k)
+    knn.fit(X_train, y_train)
+    
+    predictions = knn.predict(X_test)
+    acc = accuracy_score(y_test, predictions)
+    accuracies.append({'K': k, 'Accuracy': acc})
+    
+    if acc > best_accuracy:
+        best_accuracy = acc
+        best_k = k
+        best_model = knn
+
+pd.DataFrame(accuracies).to_csv('Accuracy.csv', index=False)
+print(f"SUCCESS: Created 'Accuracy.csv'. Best K was: {best_k}")
+
+# --- STEP 5: FINAL PREDICTION ---
+final_predictions = best_model.predict(X_test)
+confidence_scores = np.max(best_model.predict_proba(X_test), axis=1)
+
+# Add results to dataframe
+test_df_final = test_df.copy()
+test_df_final['Prediction'] = final_predictions
+test_df_final['Confidence'] = confidence_scores
+
+# Update the testing file
+test_df_final.to_csv('Testing.csv', index=False)
+print("SUCCESS: Updated 'Testing.csv' with final predictions.")
